@@ -1,0 +1,94 @@
+name: Deploy to Production (Cloud Run)
+
+on:
+  push:
+    branches:
+      - ai-receptionist-bearer-auth
+  workflow_dispatch:  # Allow manual triggering from GitHub UI
+
+env:
+  PROJECT_ID: ai-receptionist-a412e
+  SERVICE_NAME: workspace-mcp
+  REGION: us-east1
+
+jobs:
+  deploy:
+    name: Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+      
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+      
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --source . \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --set-env-vars "WORKSPACE_MCP_STATELESS_MODE=true,GOOGLE_OAUTH_CLIENT_ID=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }},GOOGLE_OAUTH_CLIENT_SECRET=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}" \
+            --memory 1Gi \
+            --cpu 1 \
+            --cpu-boost \
+            --timeout 300 \
+            --max-instances 10 \
+            --min-instances 0 \
+            --project ${{ env.PROJECT_ID }}
+      
+      - name: Get Service URL
+        id: service-url
+        run: |
+          SERVICE_URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --format='value(status.url)' \
+            --project=${{ env.PROJECT_ID }})
+          echo "url=$SERVICE_URL" >> $GITHUB_OUTPUT
+          echo "### 🚀 Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service URL:** $SERVICE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "**MCP Endpoint:** $SERVICE_URL/mcp" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ env.REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Service:** ${{ env.SERVICE_NAME }}" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Test Health Endpoint
+        run: |
+          sleep 5  # Wait for service to be ready
+          SERVICE_URL="${{ steps.service-url.outputs.url }}"
+          HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" $SERVICE_URL/health || echo "000")
+          echo "Health check status: $HEALTH_STATUS"
+          if [ "$HEALTH_STATUS" != "200" ]; then
+            echo "⚠️ Warning: Health check returned $HEALTH_STATUS"
+            echo "### ⚠️ Health Check Warning" >> $GITHUB_STEP_SUMMARY
+            echo "Health endpoint returned status: $HEALTH_STATUS" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✓ Health check passed"
+            echo "### ✅ Health Check Passed" >> $GITHUB_STEP_SUMMARY
+          fi
+      
+      - name: Output Deployment Info
+        run: |
+          echo "=========================================="
+          echo "Deployment Complete"
+          echo "=========================================="
+          echo "Service URL: ${{ steps.service-url.outputs.url }}"
+          echo "MCP Endpoint: ${{ steps.service-url.outputs.url }}/mcp"
+          echo "Region: ${{ env.REGION }}"
+          echo "Project: ${{ env.PROJECT_ID }}"
+          echo "=========================================="

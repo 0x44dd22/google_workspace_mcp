@@ -94,7 +94,105 @@ OAuth 2.1 enabled: False
 
 ## Deployment to Google Cloud Run
 
-### Prerequisites
+### Automated Deployment via GitHub Actions (Recommended)
+
+This repository uses GitHub Actions for automated deployment to Google Cloud Run. Every push to the `ai-receptionist-bearer-auth` branch automatically triggers a production deployment.
+
+#### One-Time Setup
+
+**1. Create a Google Cloud Service Account for Deployment**
+
+```bash
+# Create service account
+gcloud iam service-accounts create github-actions-deployer \
+  --display-name="GitHub Actions Deployer" \
+  --project=ai-receptionist-a412e
+
+# Grant necessary permissions
+gcloud projects add-iam-policy-binding ai-receptionist-a412e \
+  --member="serviceAccount:github-actions-deployer@ai-receptionist-a412e.iam.gserviceaccount.com" \
+  --role="roles/run.admin"
+
+gcloud projects add-iam-policy-binding ai-receptionist-a412e \
+  --member="serviceAccount:github-actions-deployer@ai-receptionist-a412e.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountUser"
+
+gcloud projects add-iam-policy-binding ai-receptionist-a412e \
+  --member="serviceAccount:github-actions-deployer@ai-receptionist-a412e.iam.gserviceaccount.com" \
+  --role="roles/storage.admin"
+
+# Create and download key
+gcloud iam service-accounts keys create github-actions-key.json \
+  --iam-account=github-actions-deployer@ai-receptionist-a412e.iam.gserviceaccount.com
+```
+
+**2. Add Secrets to GitHub Repository**
+
+Go to: `https://github.com/0x44dd22/google_workspace_mcp/settings/secrets/actions`
+
+Add the following secrets:
+
+| Secret Name | Value | Description |
+|-------------|-------|-------------|
+| `GCP_SA_KEY` | Contents of `github-actions-key.json` | Service account key for deployment |
+| `GOOGLE_OAUTH_CLIENT_ID` | Your OAuth client ID | For Google token refresh |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Your OAuth client secret | For Google token refresh |
+
+**To get OAuth credentials:**
+1. Go to: https://console.cloud.google.com/apis/credentials
+2. Select project `ai-receptionist-a412e`
+3. Find or create OAuth 2.0 Client ID
+4. Copy Client ID and Client Secret
+
+**3. Done! 🎉**
+
+Now every push to `ai-receptionist-bearer-auth` automatically deploys to production.
+
+#### How to Deploy
+
+**Option 1: Push to branch (automatic)**
+```bash
+git add .
+git commit -m "Your changes"
+git push origin ai-receptionist-bearer-auth
+# Deployment starts automatically
+```
+
+**Option 2: Manual trigger from GitHub UI**
+1. Go to: https://github.com/0x44dd22/google_workspace_mcp/actions
+2. Select "Deploy to Production (Cloud Run)"
+3. Click "Run workflow"
+4. Select branch: `ai-receptionist-bearer-auth`
+5. Click "Run workflow"
+
+#### Monitoring Deployments
+
+**View deployment status:**
+- GitHub Actions: https://github.com/0x44dd22/google_workspace_mcp/actions
+- Cloud Run Console: https://console.cloud.google.com/run/detail/us-east1/workspace-mcp?project=ai-receptionist-a412e
+
+**Deployment includes:**
+- ✅ Automated build from source
+- ✅ Deployment to Cloud Run
+- ✅ Health check validation
+- ✅ Deployment summary in GitHub Actions UI
+
+#### Workflow Configuration
+
+The workflow is defined in `.github/workflows/deploy-production.yml`:
+- **Trigger**: Push to `ai-receptionist-bearer-auth` or manual dispatch
+- **Environment**: Production (`ai-receptionist-a412e`)
+- **Region**: `us-east1`
+- **Service**: `workspace-mcp`
+- **Configuration**: 1GB RAM, 1 CPU, scales 0-10 instances
+
+---
+
+### Manual Deployment via gcloud CLI (Alternative)
+
+If you prefer to deploy manually or GitHub Actions is unavailable:
+
+#### Prerequisites
 
 1. **Google Cloud CLI installed and authenticated**
    ```bash
@@ -110,7 +208,13 @@ OAuth 2.1 enabled: False
    - Cloud Run API
    - Cloud Build API
 
-3. **Source code on the correct branch**
+3. **OAuth credentials in environment**
+   ```bash
+   export GOOGLE_OAUTH_CLIENT_ID='your-client-id.apps.googleusercontent.com'
+   export GOOGLE_OAUTH_CLIENT_SECRET='your-client-secret'
+   ```
+
+4. **Source code on the correct branch**
    ```bash
    git checkout ai-receptionist-bearer-auth
    git pull origin ai-receptionist-bearer-auth
@@ -118,30 +222,20 @@ OAuth 2.1 enabled: False
 
 ### Deployment Command
 
-**Full deployment with all options:**
+**Full deployment with OAuth credentials:**
 ```bash
 gcloud run deploy workspace-mcp \
   --source . \
   --platform managed \
   --region us-east1 \
   --allow-unauthenticated \
-  --set-env-vars "WORKSPACE_MCP_STATELESS_MODE=true" \
+  --set-env-vars "WORKSPACE_MCP_STATELESS_MODE=true,GOOGLE_OAUTH_CLIENT_ID=$GOOGLE_OAUTH_CLIENT_ID,GOOGLE_OAUTH_CLIENT_SECRET=$GOOGLE_OAUTH_CLIENT_SECRET" \
   --memory 1Gi \
   --cpu 1 \
   --cpu-boost \
   --timeout 300 \
   --max-instances 10 \
   --min-instances 0 \
-  --project ai-receptionist-a412e
-```
-
-**Minimal deployment (recommended for first deploy):**
-```bash
-gcloud run deploy workspace-mcp \
-  --source . \
-  --region us-east1 \
-  --allow-unauthenticated \
-  --set-env-vars "WORKSPACE_MCP_STATELESS_MODE=true" \
   --project ai-receptionist-a412e
 ```
 
