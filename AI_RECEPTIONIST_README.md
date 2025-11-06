@@ -492,3 +492,6 @@ GOOGLE_OAUTH_CLIENT_SECRET=<secret>      # For token refresh only
 ✅ **Purpose**: Support Bearer token auth in stateless mode  
 ✅ **Impact**: Removes ValueError that blocks server startup  
 ✅ **Maintenance**: Reapply after upstream merges  
+
+
+asdf
