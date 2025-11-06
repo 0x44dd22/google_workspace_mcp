@@ -47,8 +47,8 @@ class OAuthConfig:
 
         # Stateless mode configuration
         self.stateless_mode = os.getenv("WORKSPACE_MCP_STATELESS_MODE", "false").lower() == "true"
-        if self.stateless_mode and not self.oauth21_enabled:
-            raise ValueError("WORKSPACE_MCP_STATELESS_MODE requires MCP_ENABLE_OAUTH21=true")
+        # Note: Stateless mode can work WITHOUT OAuth 2.1 when using Bearer token authentication
+        # OAuth 2.1 is only required if the server manages OAuth flows itself
 
         # Transport mode (will be set at runtime)
         self._transport_mode = "stdio"  # Default
