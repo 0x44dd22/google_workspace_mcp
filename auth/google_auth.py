@@ -628,16 +628,29 @@ def get_credentials(
                 )
 
         if not credentials and user_google_email:
-            if not is_stateless_mode():
-                logger.debug(
-                    f"[get_credentials] No session credentials, trying credential store for user_google_email '{user_google_email}'."
-                )
-                store = get_credential_store()
-                credentials = store.get_credential(user_google_email)
-            else:
-                logger.debug(
-                    f"[get_credentials] No session credentials, skipping file store in stateless mode for user_google_email '{user_google_email}'."
-                )
+            # First try OAuth21SessionStore (for bearer token credentials)
+            try:
+                oauth21_store = get_oauth21_session_store()
+                credentials = oauth21_store.get_credentials(user_google_email)
+                if credentials:
+                    logger.debug(
+                        f"[get_credentials] Loaded credentials from OAuth21SessionStore for user_google_email '{user_google_email}'."
+                    )
+            except Exception as e:
+                logger.debug(f"[get_credentials] Error checking OAuth21SessionStore: {e}")
+            
+            # If not in OAuth21SessionStore, try file-based credential store (unless stateless)
+            if not credentials:
+                if not is_stateless_mode():
+                    logger.debug(
+                        f"[get_credentials] No session credentials, trying credential store for user_google_email '{user_google_email}'."
+                    )
+                    store = get_credential_store()
+                    credentials = store.get_credential(user_google_email)
+                else:
+                    logger.debug(
+                        f"[get_credentials] No session credentials, skipping file store in stateless mode for user_google_email '{user_google_email}'."
+                    )
 
             if credentials and session_id:
                 logger.debug(

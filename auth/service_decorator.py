@@ -309,29 +309,38 @@ def _extract_oauth21_user_email(authenticated_user: Optional[str], func_name: st
 def _extract_oauth20_user_email(
     args: tuple,
     kwargs: dict,
-    wrapper_sig: inspect.Signature
+    wrapper_sig: inspect.Signature,
+    authenticated_user: Optional[str] = None,
 ) -> str:
     """
-    Extract user email for OAuth 2.0 mode from function arguments.
+    Extract user email for OAuth 2.0 mode from function arguments or bearer token.
 
     Args:
         args: Positional arguments passed to wrapper
         kwargs: Keyword arguments passed to wrapper
         wrapper_sig: Function signature for parameter binding
+        authenticated_user: User email from bearer token (if available)
 
     Returns:
         User email string
 
     Raises:
-        Exception: If user_google_email parameter not found
+        Exception: If user_google_email parameter not found and no authenticated_user
     """
     bound_args = wrapper_sig.bind(*args, **kwargs)
     bound_args.apply_defaults()
 
     user_google_email = bound_args.arguments.get("user_google_email")
+    
+    # If user_google_email not provided but we have an authenticated_user from bearer token, use it
+    if not user_google_email and authenticated_user:
+        logger.info(f"Using authenticated user from bearer token: {authenticated_user}")
+        return authenticated_user
+    
     if not user_google_email:
         raise Exception(
-            "'user_google_email' parameter is required but was not found."
+            "'user_google_email' parameter is required but was not found. "
+            "Either provide user_google_email or use a Bearer token with a valid Google OAuth access token."
         )
     return user_google_email
 
@@ -548,7 +557,7 @@ def require_google_service(
             if is_oauth21_enabled():
                 user_google_email = _extract_oauth21_user_email(authenticated_user, func.__name__)
             else:
-                user_google_email = _extract_oauth20_user_email(args, kwargs, wrapper_sig)
+                user_google_email = _extract_oauth20_user_email(args, kwargs, wrapper_sig, authenticated_user)
 
             # Get service configuration from the decorator's arguments
             if service_type not in SERVICE_CONFIGS:
@@ -679,7 +688,7 @@ def require_multiple_services(service_configs: List[Dict[str, Any]]):
             if is_oauth21_enabled():
                 user_google_email = _extract_oauth21_user_email(authenticated_user, tool_name)
             else:
-                # OAuth 2.0 mode: extract from arguments (original logic)
+                # OAuth 2.0 mode: extract from arguments or use bearer token
                 param_names = list(original_sig.parameters.keys())
                 user_google_email = None
                 if "user_google_email" in kwargs:
@@ -692,8 +701,16 @@ def require_multiple_services(service_configs: List[Dict[str, Any]]):
                     except ValueError:
                         pass
 
+                # If user_google_email not provided but we have an authenticated_user from bearer token, use it
+                if not user_google_email and authenticated_user:
+                    logger.info(f"[{tool_name}] Using authenticated user from bearer token: {authenticated_user}")
+                    user_google_email = authenticated_user
+
                 if not user_google_email:
-                    raise Exception("user_google_email parameter is required but not found")
+                    raise Exception(
+                        "user_google_email parameter is required but not found. "
+                        "Either provide user_google_email or use a Bearer token with a valid Google OAuth access token."
+                    )
 
             # Authenticate all services
             for config in service_configs:

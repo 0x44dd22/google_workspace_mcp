@@ -42,7 +42,7 @@ jobs:
             --platform managed \
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
-            --set-env-vars "WORKSPACE_MCP_STATELESS_MODE=true,MCP_ENABLE_OAUTH21=true,EXTERNAL_OAUTH21_PROVIDER=true,GOOGLE_OAUTH_CLIENT_ID=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }},GOOGLE_OAUTH_CLIENT_SECRET=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}" \
+            --set-env-vars "WORKSPACE_MCP_STATELESS_MODE=true,MCP_ENABLE_OAUTH21=false,GOOGLE_OAUTH_CLIENT_ID=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }},GOOGLE_OAUTH_CLIENT_SECRET=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }},WORKSPACE_MCP_TRANSPORT=streamable-http" \
             --memory 1Gi \
             --cpu 1 \
             --cpu-boost \
