@@ -41,6 +41,20 @@ class AuthInfoMiddleware(Middleware):
             # Use the new FastMCP method to get HTTP headers
             headers = get_http_headers()
             if headers:
+                # Log ALL headers for debugging (mask sensitive values)
+                header_names = list(headers.keys())
+                logger.info(f"[AUTH DEBUG] Received HTTP headers: {header_names}")
+                
+                # Check if Authorization header exists
+                has_auth = "authorization" in headers
+                logger.info(f"[AUTH DEBUG] Has Authorization header: {has_auth}")
+                
+                if has_auth:
+                    auth_value = headers.get("authorization", "")
+                    # Log only the prefix to avoid leaking tokens
+                    auth_prefix = auth_value[:20] + "..." if len(auth_value) > 20 else auth_value
+                    logger.info(f"[AUTH DEBUG] Authorization header prefix: '{auth_prefix}'")
+                
                 logger.debug("Processing HTTP headers for authentication")
                 
                 # Get the Authorization header
@@ -185,9 +199,9 @@ class AuthInfoMiddleware(Middleware):
                 else:
                     logger.debug("No Bearer token in Authorization header")
             else:
-                logger.debug("No HTTP headers available (might be using stdio transport)")
+                logger.warning("[AUTH DEBUG] No HTTP headers available - get_http_headers() returned None")
         except Exception as e:
-            logger.debug(f"Could not get HTTP request: {e}")
+            logger.error(f"[AUTH DEBUG] Exception getting HTTP headers: {e}", exc_info=True)
         
         # After trying HTTP headers, check for other authentication methods
         # This consolidates all authentication logic in the middleware
