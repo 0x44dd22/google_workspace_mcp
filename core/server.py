@@ -132,10 +132,38 @@ def configure_server_for_http():
             logger.error("Failed to initialize FastMCP GoogleProvider: %s", exc, exc_info=True)
             raise
     else:
+        # OAuth 2.0 mode
         logger.info("OAuth 2.0 mode - Server will use legacy authentication.")
         server.auth = None
-        _auth_provider = None
-        set_auth_provider(None)
+        
+        # Check if we should create an external OAuth provider for Bearer token verification
+        if config.is_configured():
+            try:
+                # Create ExternalOAuthProvider for token verification even in OAuth 2.0 mode
+                from auth.external_oauth_provider import ExternalOAuthProvider
+                
+                required_scopes: List[str] = sorted(get_current_scopes())
+                provider = ExternalOAuthProvider(
+                    client_id=config.client_id,
+                    client_secret=config.client_secret,
+                    base_url=config.get_oauth_base_url(),
+                    redirect_path=config.redirect_path,
+                    required_scopes=required_scopes,
+                )
+                
+                # Set auth provider for token validation in middleware
+                set_auth_provider(provider)
+                _auth_provider = provider
+                logger.info("OAuth 2.0 mode: Created ExternalOAuthProvider for Bearer token verification")
+            except Exception as exc:
+                logger.warning(f"Failed to initialize OAuth provider for token verification: {exc}")
+                _auth_provider = None
+                set_auth_provider(None)
+        else:
+            _auth_provider = None
+            set_auth_provider(None)
+            logger.info("OAuth 2.0 mode: No OAuth credentials configured")
+        
         _ensure_legacy_callback_route()
 
 
